@@ -12,9 +12,17 @@
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="android-chrome-192x192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="android-chrome-512x512.png">
-
   <meta name="theme-color" content="#ffb347">
   <style>
+.dish button {
+  margin-left: auto;
+  font-size: 1.4em;
+  background: #ffe9d6;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 3px 13px;
+}
     :root {
       --accent: #ff9800;
       --accent-dark: #ff7b29;
@@ -594,517 +602,578 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- ===================== ALL JS: features, drag, tap-to-add, emoji picker, import/export, insights, etc. =================== -->
  <script>
-    // Emoji/Icons Mapping Logic
-    function autoEmojis(dishName) {
-      let icons = "";
-      let name = dishName.toLowerCase();
-      if (/chicken|shawarma|fajita|wings|liver/.test(name)) icons += "🍗";
-      if (/beef|meatball|meat|tenderloin|kofta|hawawshi|liver|steak/.test(name)) icons += "🥩";
-      if (/fish|seafood|shrimp|grilled fish|salmon|sardine/.test(name)) icons += "🐟";
-      if (/pasta|spaghetti|macaroni|noodle/.test(name)) icons += "🍝";
-      if (/rice|koshari|maqluba|biryani/.test(name)) icons += "🍚";
-      if (/potato|baked|couscous|bread|pizza|wrap|hawawshi|sandwich/.test(name)) icons += "🍞";
-      if (/molokhia|salad|lentil|leblabi|greens|veggie|vegetable|avocado|spinach/.test(name)) icons += "🌿";
-      if (/soup|leblabi/.test(name)) icons += "🥣";
-      if (/kid|kids|child|baby|ball/.test(name)) icons += "🧆";
-      if (/digest|fiber/.test(name)) icons += "🥣";
-      if (/liver/.test(name)) icons += "🥩";
-      return icons;
+// Mobile detection
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile/i.test(navigator.userAgent);
+}
+
+// Emoji/Icons Mapping Logic
+function autoEmojis(dishName) {
+  let icons = "";
+  let name = dishName.toLowerCase();
+  if (/chicken|shawarma|fajita|wings|liver/.test(name)) icons += "🍗";
+  if (/beef|meatball|meat|tenderloin|kofta|hawawshi|liver|steak/.test(name)) icons += "🥩";
+  if (/fish|seafood|shrimp|grilled fish|salmon|sardine/.test(name)) icons += "🐟";
+  if (/pasta|spaghetti|macaroni|noodle/.test(name)) icons += "🍝";
+  if (/rice|koshari|maqluba|biryani/.test(name)) icons += "🍚";
+  if (/potato|baked|couscous|bread|pizza|wrap|hawawshi|sandwich/.test(name)) icons += "🍞";
+  if (/molokhia|salad|lentil|leblabi|greens|veggie|vegetable|avocado|spinach/.test(name)) icons += "🌿";
+  if (/soup|leblabi/.test(name)) icons += "🥣";
+  if (/kid|kids|child|baby|ball/.test(name)) icons += "🧆";
+  if (/digest|fiber/.test(name)) icons += "🥣";
+  if (/liver/.test(name)) icons += "🥩";
+  return icons;
+}
+
+// Editable Dish Library
+const defaultDishes = [
+  "Lentil Soup", "Meatball Soup", "Oven Shawarma + Rice", "Baked Potato Chicken",
+  "Seafood Bucket + Rice", "Pasta + Shrimp", "Pasta + Chicken Balls", "Pasta + Ground Meat",
+  "Molokhia (Tunisian)", "Couscous + Meat (Tunisian)", "Leblabi + Bread", "Green Salad", "Black Lentil Salad",
+  "Koshari (Egyptian)", "Grilled Tenderloin + Rice", "Chicken Fajita Wrap", "Grilled Chicken Liver + Rice",
+  "Grilled Beef Liver + Rice", "Pizza", "Hawawshi", "Grilled Fish"
+];
+function getDishLibrary() {
+  let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
+  return [...defaultDishes, ...custom];
+}
+function setCustomDishes(arr) {
+  localStorage.setItem('customDishes', JSON.stringify(arr));
+}
+function renderDishLibrary() {
+  const dishBox = document.getElementById('dishList');
+  dishBox.innerHTML = '';
+  const custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
+  getDishLibrary().forEach((dish, i) => {
+    const div = document.createElement('div');
+    div.className = 'dish';
+    div.draggable = !isMobile();
+    div.textContent = `${autoEmojis(dish)} ${dish}`;
+    div.ondragstart = !isMobile() ? dishDragStart : null;
+    div.ondragend = !isMobile() ? dishDragEnd : null;
+
+    // Tap-to-Add for Mobile
+    if (isMobile()) {
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '＋';
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        showAddDishModal(dish);
+      };
+      div.appendChild(addBtn);
+      div.onclick = (e) => {
+        if (e.target !== addBtn) showAddDishModal(dish);
+      };
     }
 
-    // Editable Dish Library
-    const defaultDishes = [
-      "Lentil Soup", "Meatball Soup", "Oven Shawarma + Rice", "Baked Potato Chicken",
-      "Seafood Bucket + Rice", "Pasta + Shrimp", "Pasta + Chicken Balls", "Pasta + Ground Meat",
-      "Molokhia (Tunisian)", "Couscous + Meat (Tunisian)", "Leblabi + Bread", "Green Salad", "Black Lentil Salad",
-      "Koshari (Egyptian)", "Grilled Tenderloin + Rice", "Chicken Fajita Wrap", "Grilled Chicken Liver + Rice",
-      "Grilled Beef Liver + Rice", "Pizza", "Hawawshi", "Grilled Fish"
-    ];
-    function getDishLibrary() {
-      let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
-      return [...defaultDishes, ...custom];
+    // Remove custom dish
+    if (i >= defaultDishes.length) {
+      let btn = document.createElement('button');
+      btn.innerHTML = '✖';
+      btn.className = 'remove-dish';
+      btn.onclick = (e)=>{ e.stopPropagation(); removeCustomDish(i - defaultDishes.length); };
+      div.appendChild(btn);
     }
-    function setCustomDishes(arr) {
-      localStorage.setItem('customDishes', JSON.stringify(arr));
-    }
-    function renderDishLibrary() {
-      const dishBox = document.getElementById('dishList');
-      dishBox.innerHTML = '';
-      const custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
-      getDishLibrary().forEach((dish, i) => {
-        const div = document.createElement('div');
-        div.className = 'dish';
-        div.draggable = true;
-        div.textContent = `${autoEmojis(dish)} ${dish}`;
-        div.ondragstart = dishDragStart;
-        div.ondragend = dishDragEnd;
-        if (i >= defaultDishes.length) {
-          let btn = document.createElement('button');
-          btn.innerHTML = '✖';
-          btn.className = 'remove-dish';
-          btn.onclick = (e)=>{ e.stopPropagation(); removeCustomDish(i - defaultDishes.length); };
-          div.appendChild(btn);
-        }
-        dishBox.appendChild(div);
-      });
-      enableDragOnDishes();
-    }
-    function addCustomDish() {
-      let inp = document.getElementById('newDishInput');
-      let dish = inp.value.trim();
-      if (!dish) return;
-      let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
-      if (getDishLibrary().includes(dish)) {
-        inp.value = '';
-        toast("Already in library!");
-        return;
-      }
-      custom.push(dish);
-      setCustomDishes(custom);
-      inp.value = '';
-      renderDishLibrary();
-      analyzePlan();
-    }
-    function removeCustomDish(idx) {
-      let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
-      custom.splice(idx, 1);
-      setCustomDishes(custom);
-      renderDishLibrary();
-      analyzePlan();
-    }
+    dishBox.appendChild(div);
+  });
+  enableDragOnDishes();
+}
+function addCustomDish() {
+  let inp = document.getElementById('newDishInput');
+  let dish = inp.value.trim();
+  if (!dish) return;
+  let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
+  if (getDishLibrary().includes(dish)) {
+    inp.value = '';
+    toast("Already in library!");
+    return;
+  }
+  custom.push(dish);
+  setCustomDishes(custom);
+  inp.value = '';
+  renderDishLibrary();
+  analyzePlan();
+}
+function removeCustomDish(idx) {
+  let custom = JSON.parse(localStorage.getItem('customDishes') || "[]");
+  custom.splice(idx, 1);
+  setCustomDishes(custom);
+  renderDishLibrary();
+  analyzePlan();
+}
 
-    // DRAG & DROP + Everything else
-    let dragElem = null, dragSource = null, lastPlan = null, trashActive = false;
-    window.addEventListener('DOMContentLoaded', ()=>{
-      renderDishLibrary();
-      initPlanner();
+// DRAG & DROP + Everything else
+let dragElem = null, dragSource = null, lastPlan = null, trashActive = false;
+window.addEventListener('DOMContentLoaded', ()=>{
+  renderDishLibrary();
+  initPlanner();
+});
+function initPlanner(){
+  document.querySelectorAll('.meal-slot').forEach(slot => {
+    slot.addEventListener('dragover', slotDragOver);
+    slot.addEventListener('dragenter', slotDragEnter);
+    slot.addEventListener('dragleave', slotDragLeave);
+    slot.addEventListener('drop', slotDrop);
+  });
+  document.getElementById('saveBtn').onclick = savePlan;
+  document.getElementById('loadBtn').onclick = loadPlan;
+  document.getElementById('clearBtn').onclick = clearPlan;
+  document.getElementById('trashBin').addEventListener('dragover', trashDragOver);
+  document.getElementById('trashBin').addEventListener('drop', trashDrop);
+  document.getElementById('trashBin').addEventListener('dragleave', trashDragLeave);
+  renderFavorites();
+  loadPlan();
+  analyzePlan();
+}
+function enableDragOnDishes(){
+  if (!isMobile()) {
+    document.querySelectorAll('#dishList .dish').forEach(dish => {
+      dish.draggable = true;
+      dish.ondragstart = dishDragStart;
+      dish.ondragend = dishDragEnd;
     });
-    function initPlanner(){
-      document.querySelectorAll('.meal-slot').forEach(slot => {
-        slot.addEventListener('dragover', slotDragOver);
-        slot.addEventListener('dragenter', slotDragEnter);
-        slot.addEventListener('dragleave', slotDragLeave);
-        slot.addEventListener('drop', slotDrop);
-      });
-      document.getElementById('saveBtn').onclick = savePlan;
-      document.getElementById('loadBtn').onclick = loadPlan;
-      document.getElementById('clearBtn').onclick = clearPlan;
-      document.getElementById('trashBin').addEventListener('dragover', trashDragOver);
-      document.getElementById('trashBin').addEventListener('drop', trashDrop);
-      document.getElementById('trashBin').addEventListener('dragleave', trashDragLeave);
-      renderFavorites();
-      loadPlan();
+    document.querySelectorAll('.meal-slot .dish').forEach(dish => {
+      dish.draggable = true;
+      dish.ondragstart = dishDragStart;
+      dish.ondragend = dishDragEnd;
+      if(!dish.querySelector('.remove-dish')){
+        let btn = document.createElement('button');
+        btn.innerHTML = '✖';
+        btn.className = 'remove-dish';
+        btn.onclick = (e)=>{ e.stopPropagation(); dish.remove(); analyzePlan(); };
+        dish.appendChild(btn);
+      }
+    });
+  }
+}
+function dishDragStart(e){
+  dragElem = e.target;
+  dragSource = e.target.parentNode;
+  setTimeout(()=>dragElem.classList.add('dragging'),0);
+  e.dataTransfer.effectAllowed = "move";
+}
+function dishDragEnd(e){
+  if(dragElem) dragElem.classList.remove('dragging');
+  dragElem = null; dragSource = null;
+  document.getElementById('trashBin').classList.remove('active');
+  trashActive = false;
+  document.querySelectorAll('.meal-slot').forEach(slot=>slot.classList.remove('active-drop'));
+}
+function slotDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+}
+function slotDragEnter(e){
+  e.preventDefault();
+  e.currentTarget.classList.add('active-drop');
+}
+function slotDragLeave(e){
+  e.currentTarget.classList.remove('active-drop');
+}
+function slotDrop(e){
+  e.preventDefault();
+  let slot = e.currentTarget;
+  slot.classList.remove('active-drop');
+  if (dragElem && dragElem.classList.contains('dish')) {
+    let newDish = dragElem.cloneNode(true);
+    newDish.classList.remove('dragging');
+    newDish.ondragstart = dishDragStart;
+    newDish.ondragend = dishDragEnd;
+    let btn = newDish.querySelector('.remove-dish');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.innerHTML = '✖';
+      btn.className = 'remove-dish';
+      btn.onclick = (e)=>{ e.stopPropagation(); newDish.remove(); analyzePlan(); };
+      newDish.appendChild(btn);
+    }
+    slot.appendChild(newDish);
+    enableDragOnDishes();
+    analyzePlan();
+  }
+}
+function trashDragOver(e){
+  e.preventDefault();
+  document.getElementById('trashBin').classList.add('active');
+  trashActive = true;
+}
+function trashDrop(e){
+  e.preventDefault();
+  if(dragElem && dragElem.closest('.meal-slot')){
+    let fade = dragElem;
+    fade.style.transition = "opacity 0.32s cubic-bezier(.31,1.56,.51,.86)";
+    fade.style.opacity = 0;
+    setTimeout(()=>{
+      if(fade.parentNode) fade.remove();
       analyzePlan();
-    }
-    function enableDragOnDishes(){
-      document.querySelectorAll('#dishList .dish').forEach(dish => {
-        dish.draggable = true;
-        dish.ondragstart = dishDragStart;
-        dish.ondragend = dishDragEnd;
-      });
-      document.querySelectorAll('.meal-slot .dish').forEach(dish => {
-        dish.draggable = true;
-        dish.ondragstart = dishDragStart;
-        dish.ondragend = dishDragEnd;
-        if(!dish.querySelector('.remove-dish')){
-          let btn = document.createElement('button');
-          btn.innerHTML = '✖';
-          btn.className = 'remove-dish';
-          btn.onclick = (e)=>{ e.stopPropagation(); dish.remove(); analyzePlan(); };
-          dish.appendChild(btn);
-        }
-      });
-    }
-    function dishDragStart(e){
-      dragElem = e.target;
-      dragSource = e.target.parentNode;
-      setTimeout(()=>dragElem.classList.add('dragging'),0);
-      e.dataTransfer.effectAllowed = "move";
-    }
-    function dishDragEnd(e){
-      if(dragElem) dragElem.classList.remove('dragging');
-      dragElem = null; dragSource = null;
-      document.getElementById('trashBin').classList.remove('active');
-      trashActive = false;
-      document.querySelectorAll('.meal-slot').forEach(slot=>slot.classList.remove('active-drop'));
-    }
-    function slotDragOver(e){
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    }
-    function slotDragEnter(e){
-      e.preventDefault();
-      e.currentTarget.classList.add('active-drop');
-    }
-    function slotDragLeave(e){
-      e.currentTarget.classList.remove('active-drop');
-    }
-    function slotDrop(e){
-      e.preventDefault();
-      let slot = e.currentTarget;
-      slot.classList.remove('active-drop');
-      if (dragElem && dragElem.classList.contains('dish')) {
-        let newDish = dragElem.cloneNode(true);
-        newDish.classList.remove('dragging');
-        newDish.ondragstart = dishDragStart;
-        newDish.ondragend = dishDragEnd;
-        let btn = newDish.querySelector('.remove-dish');
-        if(!btn){
-          btn = document.createElement('button');
-          btn.innerHTML = '✖';
-          btn.className = 'remove-dish';
-          btn.onclick = (e)=>{ e.stopPropagation(); newDish.remove(); analyzePlan(); };
-          newDish.appendChild(btn);
-        }
-        slot.appendChild(newDish);
-        enableDragOnDishes();
-        analyzePlan();
-      }
-    }
-    function trashDragOver(e){
-      e.preventDefault();
-      document.getElementById('trashBin').classList.add('active');
-      trashActive = true;
-    }
-    function trashDrop(e){
-      e.preventDefault();
-      if(dragElem && dragElem.closest('.meal-slot')){
-        let fade = dragElem;
-        fade.style.transition = "opacity 0.32s cubic-bezier(.31,1.56,.51,.86)";
-        fade.style.opacity = 0;
-        setTimeout(()=>{
-          if(fade.parentNode) fade.remove();
-          analyzePlan();
-        },320);
-      }
-      document.getElementById('trashBin').classList.remove('active');
-      trashActive = false;
-    }
-    function trashDragLeave(e){
-      document.getElementById('trashBin').classList.remove('active');
-      trashActive = false;
-    }
+    },320);
+  }
+  document.getElementById('trashBin').classList.remove('active');
+  trashActive = false;
+}
+function trashDragLeave(e){
+  document.getElementById('trashBin').classList.remove('active');
+  trashActive = false;
+}
 
-    // Save/load/clear/undo, Export, Recipe Suggestion, Favorites...
-    function savePlan(){
-      const dayCols = document.querySelectorAll('.day-column');
-      let plan = {};
-      dayCols.forEach(col => {
-        const day = col.querySelector('h3').textContent;
-        plan[day] = {};
-        col.querySelectorAll('.meal-slot').forEach(slot=>{
-          const mealName = slot.dataset.meal;
-          plan[day][mealName] = [];
-          slot.querySelectorAll('.dish').forEach(dish => plan[day][mealName].push(dish.textContent.replace('✖','').trim()));
-        });
-      });
-      localStorage.setItem('mealPlan', JSON.stringify(plan));
-      toast("Meal plan saved! 🥳");
-      analyzePlan();
-    }
-    function loadPlan(){
-      const plan = JSON.parse(localStorage.getItem('mealPlan'));
-      if (!plan) { analyzePlan(); return; }
-      document.querySelectorAll('.day-column').forEach(col =>{
-        const day = col.querySelector('h3').textContent;
-        col.querySelectorAll('.meal-slot').forEach(slot=>{
-          const mealName = slot.dataset.meal;
-          slot.innerHTML = mealName;
-          if(plan[day] && plan[day][mealName]){
-            plan[day][mealName].forEach(dishText=>{
-              const div=document.createElement('div');
-              div.className='dish';
-              div.textContent=dishText;
-              div.draggable=true;
-              div.ondragstart = dishDragStart;
-              div.ondragend = dishDragEnd;
-              let btn = document.createElement('button');
-              btn.innerHTML = '✖';
-              btn.className = 'remove-dish';
-              btn.onclick = (e)=>{ e.stopPropagation(); div.remove(); analyzePlan(); };
-              div.appendChild(btn);
-              slot.appendChild(div);
-            });
-          }
-        });
-      });
-      enableDragOnDishes();
-      analyzePlan();
-    }
-    function clearPlan(){
-      lastPlan = localStorage.getItem('mealPlan');
-      document.querySelectorAll('.meal-slot').forEach(slot=>{
-        slot.innerHTML=slot.dataset.meal;
-      });
-      showUndoSnackbar();
-      analyzePlan();
-    }
-    function showUndoSnackbar() {
-      let old = document.getElementById('undoSnackbar');
-      if(old) old.remove();
-      let sb = document.createElement('div');
-      sb.textContent = "Cleared! Click to Undo ⬅️";
-      sb.id = "undoSnackbar";
-      sb.onclick = () => { if(lastPlan){ localStorage.setItem('mealPlan', lastPlan); loadPlan(); sb.remove(); }};
-      document.body.appendChild(sb);
-      setTimeout(()=>{ if(sb.parentNode) sb.remove(); }, 4800);
-    }
-    function toast(msg) {
-      let t = document.createElement('div');
-      t.id = 'undoSnackbar';
-      t.textContent = msg;
-      document.body.appendChild(t);
-      setTimeout(()=>{ if(t.parentNode) t.remove(); }, 1600);
-    }
-    // Export grocery PDF
-    function exportToPDF(){
-      const { jsPDF }=window.jspdf;
-      const doc=new jsPDF();
-      doc.text("Grocery List",10,10);
-      let y=20;
-      const items=new Set();
-      document.querySelectorAll('.meal-slot .dish').forEach(dish=>items.add(dish.textContent.replace('✖','').trim()));
-      let i=0;
-      items.forEach(item=>{
-        doc.text(`- ${item}`,10,y+i*10);
-        i++;
-      });
-      doc.save("Grocery_List.pdf");
-    }
-
-    // Recipe Suggestion & Favorites
-    function suggestMealIdeas(){
-      const input=document.getElementById('ingredientInput').value.toLowerCase();
-      const output=document.getElementById('suggestionResults');
-      const list=document.getElementById('webResults');
-      output.innerText='';
-      list.innerHTML='';
-      if(!input.trim()){
-        output.innerText="Please enter at least one ingredient.";
-        return;
-      }
-      let suggestions=[];
-      if(input.includes('chicken')) suggestions.push("Try grilled chicken or chicken curry.");
-      if(input.includes('beef')) suggestions.push("Try beef stew or kofta kebab.");
-      if(input.includes('pasta')) suggestions.push("Try creamy chicken pasta.");
-      output.innerText=suggestions.join('\n');
-      fetchRecipesFromAPI(input);
-    }
-    async function fetchRecipesFromAPI(ingredients){
-      const list=document.getElementById('webResults');
-      list.innerHTML='🔄 Searching...';
-      try{
-        const res=await fetch(`https://api.spoonacular.com/recipes/findByIngredients?ingredients=${encodeURIComponent(ingredients)}&number=5&apiKey=2036afc5ca5c4e73889d9a988c25993c`);
-        const data=await res.json();
-        list.innerHTML='';
-        if(!data.length){
-          list.innerHTML='<li>No recipes found. Try other ingredients.</li>';
-          return;
-        }
-        data.forEach(recipe=>{
-          const li=document.createElement('li');
-          const a=document.createElement('a');
-          a.href=`https://spoonacular.com/recipes/${recipe.title.replace(/ /g,'-')}-${recipe.id}`;
-          a.target='_blank';
-          a.textContent=recipe.title;
-          a.className = "card-title-link";
-          const img=document.createElement('img');
-          img.src=recipe.image;
-          img.alt=recipe.title;
-          img.style="width: 120px; height: 120px; border-radius: 13px; object-fit: cover; margin-right: 12px;";
-          const saveBtn=document.createElement('button');
-          saveBtn.textContent='❤️ Save';
-          saveBtn.onclick=()=>saveFavorite(a.href,recipe.title,recipe.image);
-          const addBtn=document.createElement('button');
-          addBtn.textContent='➕ Add to Plan';
-          addBtn.onclick=()=>showAddRecipeModal(recipe.title,recipe.image);
-          li.appendChild(img);
-          li.appendChild(a);
-          li.appendChild(saveBtn);
-          li.appendChild(addBtn);
-          list.appendChild(li);
-        });
-      }catch(err){
-        list.innerHTML='<li>Error fetching recipes. Check your internet or API key.</li>';
-      }
-    }
-    function showAddRecipeModal(title, image) {
-      let modal = document.createElement('div');
-      modal.style = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,24,20,0.28);display:flex;align-items:center;justify-content:center;z-index:2000;";
-      modal.innerHTML = `<div style="background:#fffbe6;padding:32px 24px;border-radius:14px;box-shadow:0 2px 22px #ffd9b394;">
-        <h3 style="margin:0 0 12px 0;">Add to which day?</h3>
-        <img src="${image}" style="width:90px;height:90px;border-radius:10px;object-fit:cover;margin-bottom:10px;">
-        <div style="margin-bottom:12px;font-weight:600;">${title}</div>
-        <div id="pickDayBtns" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;"></div>
-        <button onclick="document.body.removeChild(this.parentNode.parentNode)">Cancel</button>
-        </div>`;
-      let days = Array.from(document.querySelectorAll('.day-column h3')).map(d=>d.textContent);
-      let pickBtns = modal.querySelector('#pickDayBtns');
-      days.forEach(day=>{
-        let btn=document.createElement('button');
-        btn.textContent=day;
-        btn.style="padding:7px 13px;font-size:1em;margin:2px;";
-        btn.onclick=()=>{
-          let slot = Array.from(document.querySelectorAll('.day-column')).find(c=>c.querySelector('h3').textContent==day).querySelector('.meal-slot');
-          let div=document.createElement('div');
+// Save/load/clear/undo, Export, Recipe Suggestion, Favorites...
+function savePlan(){
+  const dayCols = document.querySelectorAll('.day-column');
+  let plan = {};
+  dayCols.forEach(col => {
+    const day = col.querySelector('h3').textContent;
+    plan[day] = {};
+    col.querySelectorAll('.meal-slot').forEach(slot=>{
+      const mealName = slot.dataset.meal;
+      plan[day][mealName] = [];
+      slot.querySelectorAll('.dish').forEach(dish => plan[day][mealName].push(dish.textContent.replace('✖','').trim()));
+    });
+  });
+  localStorage.setItem('mealPlan', JSON.stringify(plan));
+  toast("Meal plan saved! 🥳");
+  analyzePlan();
+}
+function loadPlan(){
+  const plan = JSON.parse(localStorage.getItem('mealPlan'));
+  if (!plan) { analyzePlan(); return; }
+  document.querySelectorAll('.day-column').forEach(col =>{
+    const day = col.querySelector('h3').textContent;
+    col.querySelectorAll('.meal-slot').forEach(slot=>{
+      const mealName = slot.dataset.meal;
+      slot.innerHTML = mealName;
+      if(plan[day] && plan[day][mealName]){
+        plan[day][mealName].forEach(dishText=>{
+          const div=document.createElement('div');
           div.className='dish';
-          div.textContent=autoEmojis(title)+' '+title;
+          div.textContent=dishText;
           div.draggable=true;
           div.ondragstart = dishDragStart;
           div.ondragend = dishDragEnd;
-          let imgEl=document.createElement('img');
-          imgEl.src=image;
-          imgEl.alt=title;
-          imgEl.style="width:38px;height:38px;object-fit:cover;border-radius:7px;margin-right:7px;vertical-align:middle;";
-          div.prepend(imgEl);
           let btn = document.createElement('button');
           btn.innerHTML = '✖';
           btn.className = 'remove-dish';
           btn.onclick = (e)=>{ e.stopPropagation(); div.remove(); analyzePlan(); };
           div.appendChild(btn);
           slot.appendChild(div);
-          enableDragOnDishes();
-          analyzePlan();
-          document.body.removeChild(modal);
-        };
-        pickBtns.appendChild(btn);
-      });
-      document.body.appendChild(modal);
+        });
+      }
+    });
+  });
+  enableDragOnDishes();
+  analyzePlan();
+}
+function clearPlan(){
+  lastPlan = localStorage.getItem('mealPlan');
+  document.querySelectorAll('.meal-slot').forEach(slot=>{
+    slot.innerHTML=slot.dataset.meal;
+  });
+  showUndoSnackbar();
+  analyzePlan();
+}
+function showUndoSnackbar() {
+  let old = document.getElementById('undoSnackbar');
+  if(old) old.remove();
+  let sb = document.createElement('div');
+  sb.textContent = "Cleared! Click to Undo ⬅️";
+  sb.id = "undoSnackbar";
+  sb.onclick = () => { if(lastPlan){ localStorage.setItem('mealPlan', lastPlan); loadPlan(); sb.remove(); }};
+  document.body.appendChild(sb);
+  setTimeout(()=>{ if(sb.parentNode) sb.remove(); }, 4800);
+}
+function toast(msg) {
+  let t = document.createElement('div');
+  t.id = 'undoSnackbar';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ if(t.parentNode) t.remove(); }, 1600);
+}
+// Export grocery PDF
+function exportToPDF(){
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF();
+  doc.text("Grocery List",10,10);
+  let y=20;
+  const items=new Set();
+  document.querySelectorAll('.meal-slot .dish').forEach(dish=>items.add(dish.textContent.replace('✖','').trim()));
+  let i=0;
+  items.forEach(item=>{
+    doc.text(`- ${item}`,10,y+i*10);
+    i++;
+  });
+  doc.save("Grocery_List.pdf");
+}
+
+// Recipe Suggestion & Favorites
+function suggestMealIdeas(){
+  const input=document.getElementById('ingredientInput').value.toLowerCase();
+  const output=document.getElementById('suggestionResults');
+  const list=document.getElementById('webResults');
+  output.innerText='';
+  list.innerHTML='';
+  if(!input.trim()){
+    output.innerText="Please enter at least one ingredient.";
+    return;
+  }
+  let suggestions=[];
+  if(input.includes('chicken')) suggestions.push("Try grilled chicken or chicken curry.");
+  if(input.includes('beef')) suggestions.push("Try beef stew or kofta kebab.");
+  if(input.includes('pasta')) suggestions.push("Try creamy chicken pasta.");
+  output.innerText=suggestions.join('\n');
+  fetchRecipesFromAPI(input);
+}
+async function fetchRecipesFromAPI(ingredients){
+  const list=document.getElementById('webResults');
+  list.innerHTML='🔄 Searching...';
+  try{
+    const res=await fetch(`https://api.spoonacular.com/recipes/findByIngredients?ingredients=${encodeURIComponent(ingredients)}&number=5&apiKey=2036afc5ca5c4e73889d9a988c25993c`);
+    const data=await res.json();
+    list.innerHTML='';
+    if(!data.length){
+      list.innerHTML='<li>No recipes found. Try other ingredients.</li>';
+      return;
     }
-    // Favorites management
-    function saveFavorite(url,title,img){
-      let favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
-      if (!favorites.find(f=>f.url === url)) {
-        favorites.push({title,url,img});
-        localStorage.setItem('favorites',JSON.stringify(favorites));
-        renderFavorites();
-        toast("Saved to favorites! 💖");
-      }
-    }
-    function renderFavorites(){
-      const favList=document.getElementById('favoritesList');
-      favList.innerHTML='';
-      const favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
-      favorites.forEach((fav,idx)=>{
-        const li = document.createElement('li');
-        if(fav.img){
-          const img=document.createElement('img');
-          img.src=fav.img; img.alt=fav.title;
-          li.appendChild(img);
-        }
-        const a=document.createElement('a');
-        a.href=fav.url;
-        a.target='_blank';
-        a.textContent=fav.title;
-        a.className="card-title-link";
-        li.appendChild(a);
-        const removeBtn = document.createElement('button');
-        removeBtn.innerHTML = "🗑️";
-        removeBtn.className = "remove-fav";
-        removeBtn.onclick = ()=>{removeFavorite(idx);};
-        li.appendChild(removeBtn);
-        favList.appendChild(li);
-      });
-    }
-    function removeFavorite(idx){
-      let favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
-      favorites.splice(idx,1);
-      localStorage.setItem('favorites',JSON.stringify(favorites));
-      renderFavorites();
-    }
-    // AI-Powered Insights: As above (see previous code)
-    function analyzePlan() {
-      let dishes = [];
-      let counts = {protein: 0, greens: 0, kids: 0, total: 0};
-      let mealMap = {};
-      document.querySelectorAll('.meal-slot .dish').forEach(dish => {
-        let txt = dish.textContent.replace('✖','').trim();
-        dishes.push(txt);
-        if (txt.match(/(🍗|🥩|🐟|🍖|🍤|🍚|🍞|🥘|🍝|🦐)/)) counts.protein++;
-        if (txt.match(/(🌿|🥗|🥣)/)) counts.greens++;
-        if (txt.includes('🧆')) counts.kids++;
-        counts.total++;
-        mealMap[txt] = (mealMap[txt] || 0) + 1;
-      });
-      let introMsg = "";
-      if (counts.total === 0) {
-        introMsg = "Ready to cook up some magic? Start dragging those yummy dishes, Chef Mariem! 👩‍🍳";
-      } else if (counts.total >= 4) {
-        introMsg = "Solid plan for the week, Mariem! 👏 The family’s gonna eat like royalty.";
-      } else {
-        introMsg = "Great start! Just a few more dishes and you’ll have a feast on your hands 😋.";
-      }
-      let insightMsg = "";
-      if (counts.total > 0) {
-        let p = Math.round(100 * counts.protein / counts.total);
-        let g = Math.round(100 * counts.greens / counts.total);
-        insightMsg += `Protein dishes: <b>${p}%</b>, Veggie/Healthy: <b>${g}%</b>.<br>`;
-      }
-      if (counts.kids < 1 && counts.total > 0) {
-        insightMsg += `Low on kid-friendly dishes! Maybe add something special for Yazid & Yahya (🧆)?<br>`;
-      }
-      let repeats = Object.entries(mealMap).filter(([_, n]) => n > 1);
-      if (repeats.length > 0) {
-        insightMsg += `Looks like you’re doubling up: <b>${repeats.map(r=>`${r[0]} x${r[1]}`).join(', ')}</b>.<br>`;
-      }
-      let empties = [];
-      document.querySelectorAll('.meal-slot').forEach(slot => {
-        if (slot.querySelectorAll('.dish').length === 0) {
-          empties.push(slot.parentElement.querySelector('h3').textContent);
-        }
-      });
-      if (empties.length) {
-        insightMsg += `Still hungry? No main course for: <b>${empties.join(', ')}</b>.<br>`;
-      }
-      let suggestions = [];
-      if (counts.greens/counts.total < 0.3 && counts.total > 0) {
-        suggestions.push("A few more veggies wouldn’t hurt—think happy tummies and extra vitamins for the whole crew! 🥗🌿");
-      }
-      if (counts.kids < 1) {
-        suggestions.push("Yazid and Yahya deserve some extra love—maybe add a favorite kid dish? 🤩🧆");
-      }
-      if (counts.greens/counts.total > 0.5 && counts.protein/counts.total > 0.5 && !repeats.length && counts.total >= 5) {
-        suggestions.push("Wow, balanced and creative! You’re officially a kitchen superstar, Mariem 🌟.");
-      }
-      if (suggestions.length)
-        insightMsg += `<div style="margin-top:7px;color:#ff7b29;font-weight:600;">Hey Mariem! <ul style="margin:3px 0 0 18px;">`+
-          suggestions.map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
-      let wrap = "";
-      if (counts.total > 0 && suggestions.length == 0) {
-        wrap = "<span class='ins-badge'>This plan is looking delicious and well-balanced. The family will love it! 💖</span>";
-      }
-      document.getElementById('insightBox').innerHTML = `<div>${introMsg}</div>${insightMsg}${wrap}`;
-    }
-    function suggestFromLibrary(emojis, exclude=[]) {
-      let options = [];
-      getDishLibrary().forEach(txt=>{
-        let iconTxt = `${autoEmojis(txt)} ${txt}`;
-        if (emojis && !emojis.some(e=>iconTxt.includes(e))) return;
-        if (exclude && exclude.includes(iconTxt)) return;
-        options.push(`<span class="ai-suggest" onclick="addSuggestedDish('${iconTxt.replace(/'/g,"\\'")}')">${iconTxt} ➕</span>`);
-      });
-      return options.slice(0,2).join('');
-    }
-    function addSuggestedDish(dishText) {
-      let empty = Array.from(document.querySelectorAll('.meal-slot')).find(slot=>slot.querySelectorAll('.dish').length==0);
-      if(!empty) return;
+    data.forEach(recipe=>{
+      const li=document.createElement('li');
+      const a=document.createElement('a');
+      a.href=`https://spoonacular.com/recipes/${recipe.title.replace(/ /g,'-')}-${recipe.id}`;
+      a.target='_blank';
+      a.textContent=recipe.title;
+      a.className = "card-title-link";
+      const img=document.createElement('img');
+      img.src=recipe.image;
+      img.alt=recipe.title;
+      img.style="width: 120px; height: 120px; border-radius: 13px; object-fit: cover; margin-right: 12px;";
+      const saveBtn=document.createElement('button');
+      saveBtn.textContent='❤️ Save';
+      saveBtn.onclick=()=>saveFavorite(a.href,recipe.title,recipe.image);
+      const addBtn=document.createElement('button');
+      addBtn.textContent='➕ Add to Plan';
+      addBtn.onclick=()=>showAddRecipeModal(recipe.title,recipe.image);
+      li.appendChild(img);
+      li.appendChild(a);
+      li.appendChild(saveBtn);
+      li.appendChild(addBtn);
+      list.appendChild(li);
+    });
+  }catch(err){
+    list.innerHTML='<li>Error fetching recipes. Check your internet or API key.</li>';
+  }
+}
+function showAddRecipeModal(title, image) {
+  let modal = document.createElement('div');
+  modal.style = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,24,20,0.28);display:flex;align-items:center;justify-content:center;z-index:2000;";
+  modal.innerHTML = `<div style="background:#fffbe6;padding:32px 24px;border-radius:14px;box-shadow:0 2px 22px #ffd9b394;">
+    <h3 style="margin:0 0 12px 0;">Add to which day?</h3>
+    <img src="${image}" style="width:90px;height:90px;border-radius:10px;object-fit:cover;margin-bottom:10px;">
+    <div style="margin-bottom:12px;font-weight:600;">${title}</div>
+    <div id="pickDayBtns" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;"></div>
+    <button onclick="document.body.removeChild(this.parentNode.parentNode)">Cancel</button>
+    </div>`;
+  let days = Array.from(document.querySelectorAll('.day-column h3')).map(d=>d.textContent);
+  let pickBtns = modal.querySelector('#pickDayBtns');
+  days.forEach(day=>{
+    let btn=document.createElement('button');
+    btn.textContent=day;
+    btn.style="padding:7px 13px;font-size:1em;margin:2px;";
+    btn.onclick=()=>{
+      let slot = Array.from(document.querySelectorAll('.day-column')).find(c=>c.querySelector('h3').textContent==day).querySelector('.meal-slot');
       let div=document.createElement('div');
       div.className='dish';
-      div.textContent=dishText;
+      div.textContent=autoEmojis(title)+' '+title;
       div.draggable=true;
       div.ondragstart = dishDragStart;
       div.ondragend = dishDragEnd;
+      let imgEl=document.createElement('img');
+      imgEl.src=image;
+      imgEl.alt=title;
+      imgEl.style="width:38px;height:38px;object-fit:cover;border-radius:7px;margin-right:7px;vertical-align:middle;";
+      div.prepend(imgEl);
       let btn = document.createElement('button');
       btn.innerHTML = '✖';
       btn.className = 'remove-dish';
       btn.onclick = (e)=>{ e.stopPropagation(); div.remove(); analyzePlan(); };
       div.appendChild(btn);
-      empty.appendChild(div);
+      slot.appendChild(div);
       enableDragOnDishes();
       analyzePlan();
+      document.body.removeChild(modal);
+    };
+    pickBtns.appendChild(btn);
+  });
+  document.body.appendChild(modal);
+}
+// Favorites management
+function saveFavorite(url,title,img){
+  let favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
+  if (!favorites.find(f=>f.url === url)) {
+    favorites.push({title,url,img});
+    localStorage.setItem('favorites',JSON.stringify(favorites));
+    renderFavorites();
+    toast("Saved to favorites! 💖");
+  }
+}
+function renderFavorites(){
+  const favList=document.getElementById('favoritesList');
+  favList.innerHTML='';
+  const favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
+  favorites.forEach((fav,idx)=>{
+    const li = document.createElement('li');
+    if(fav.img){
+      const img=document.createElement('img');
+      img.src=fav.img; img.alt=fav.title;
+      li.appendChild(img);
     }
-    window.addSuggestedDish = addSuggestedDish;
-  </script>
+    const a=document.createElement('a');
+    a.href=fav.url;
+    a.target='_blank';
+    a.textContent=fav.title;
+    a.className="card-title-link";
+    li.appendChild(a);
+    const removeBtn = document.createElement('button');
+    removeBtn.innerHTML = "🗑️";
+    removeBtn.className = "remove-fav";
+    removeBtn.onclick = ()=>{removeFavorite(idx);};
+    li.appendChild(removeBtn);
+    favList.appendChild(li);
+  });
+}
+function removeFavorite(idx){
+  let favorites=JSON.parse(localStorage.getItem('favorites')||'[]');
+  favorites.splice(idx,1);
+  localStorage.setItem('favorites',JSON.stringify(favorites));
+  renderFavorites();
+}
+// AI-Powered Insights: As above (see previous code)
+function analyzePlan() {
+  let dishes = [];
+  let counts = {protein: 0, greens: 0, kids: 0, total: 0};
+  let mealMap = {};
+  document.querySelectorAll('.meal-slot .dish').forEach(dish => {
+    let txt = dish.textContent.replace('✖','').trim();
+    dishes.push(txt);
+    if (txt.match(/(🍗|🥩|🐟|🍖|🍤|🍚|🍞|🥘|🍝|🦐)/)) counts.protein++;
+    if (txt.match(/(🌿|🥗|🥣)/)) counts.greens++;
+    if (txt.includes('🧆')) counts.kids++;
+    counts.total++;
+    mealMap[txt] = (mealMap[txt] || 0) + 1;
+  });
+  let introMsg = "";
+  if (counts.total === 0) {
+    introMsg = "Ready to cook up some magic? Start dragging those yummy dishes, Chef Mariem! 👩‍🍳";
+  } else if (counts.total >= 4) {
+    introMsg = "Solid plan for the week, Mariem! 👏 The family’s gonna eat like royalty.";
+  } else {
+    introMsg = "Great start! Just a few more dishes and you’ll have a feast on your hands 😋.";
+  }
+  let insightMsg = "";
+  if (counts.total > 0) {
+    let p = Math.round(100 * counts.protein / counts.total);
+    let g = Math.round(100 * counts.greens / counts.total);
+    insightMsg += `Protein dishes: <b>${p}%</b>, Veggie/Healthy: <b>${g}%</b>.<br>`;
+  }
+  if (counts.kids < 1 && counts.total > 0) {
+    insightMsg += `Low on kid-friendly dishes! Maybe add something special for Yazid & Yahya (🧆)?<br>`;
+  }
+  let repeats = Object.entries(mealMap).filter(([_, n]) => n > 1);
+  if (repeats.length > 0) {
+    insightMsg += `Looks like you’re doubling up: <b>${repeats.map(r=>`${r[0]} x${r[1]}`).join(', ')}</b>.<br>`;
+  }
+  let empties = [];
+  document.querySelectorAll('.meal-slot').forEach(slot => {
+    if (slot.querySelectorAll('.dish').length === 0) {
+      empties.push(slot.parentElement.querySelector('h3').textContent);
+    }
+  });
+  if (empties.length) {
+    insightMsg += `Still hungry? No main course for: <b>${empties.join(', ')}</b>.<br>`;
+  }
+  let suggestions = [];
+  if (counts.greens/counts.total < 0.3 && counts.total > 0) {
+    suggestions.push("A few more veggies wouldn’t hurt—think happy tummies and extra vitamins for the whole crew! 🥗🌿");
+  }
+  if (counts.kids < 1) {
+    suggestions.push("Yazid and Yahya deserve some extra love—maybe add a favorite kid dish? 🤩🧆");
+  }
+  if (counts.greens/counts.total > 0.5 && counts.protein/counts.total > 0.5 && !repeats.length && counts.total >= 5) {
+    suggestions.push("Wow, balanced and creative! You’re officially a kitchen superstar, Mariem 🌟.");
+  }
+  if (suggestions.length)
+    insightMsg += `<div style="margin-top:7px;color:#ff7b29;font-weight:600;">Hey Mariem! <ul style="margin:3px 0 0 18px;">`+
+      suggestions.map(s=>`<li>${s}</li>`).join('') + '</ul></div>';
+  let wrap = "";
+  if (counts.total > 0 && suggestions.length == 0) {
+    wrap = "<span class='ins-badge'>This plan is looking delicious and well-balanced. The family will love it! 💖</span>";
+  }
+  document.getElementById('insightBox').innerHTML = `<div>${introMsg}</div>${insightMsg}${wrap}`;
+}
+function suggestFromLibrary(emojis, exclude=[]) {
+  let options = [];
+  getDishLibrary().forEach(txt=>{
+    let iconTxt = `${autoEmojis(txt)} ${txt}`;
+    if (emojis && !emojis.some(e=>iconTxt.includes(e))) return;
+    if (exclude && exclude.includes(iconTxt)) return;
+    options.push(`<span class="ai-suggest" onclick="addSuggestedDish('${iconTxt.replace(/'/g,"\\'")}')">${iconTxt} ➕</span>`);
+  });
+  return options.slice(0,2).join('');
+}
+function addSuggestedDish(dishText) {
+  let empty = Array.from(document.querySelectorAll('.meal-slot')).find(slot=>slot.querySelectorAll('.dish').length==0);
+  if(!empty) return;
+  let div=document.createElement('div');
+  div.className='dish';
+  div.textContent=dishText;
+  div.draggable=true;
+  div.ondragstart = dishDragStart;
+  div.ondragend = dishDragEnd;
+  let btn = document.createElement('button');
+  btn.innerHTML = '✖';
+  btn.className = 'remove-dish';
+  btn.onclick = (e)=>{ e.stopPropagation(); div.remove(); analyzePlan(); };
+  div.appendChild(btn);
+  empty.appendChild(div);
+  enableDragOnDishes();
+  analyzePlan();
+}
+window.addSuggestedDish = addSuggestedDish;
 
+function showAddDishModal(dishName) {
+  let modal = document.createElement('div');
+  modal.style = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,24,20,0.16);display:flex;align-items:center;justify-content:center;z-index:2000;";
+  modal.innerHTML = `<div style="background:#fffbe6;padding:32px 24px;border-radius:14px;box-shadow:0 2px 22px #ffd9b394;">
+    <h3 style="margin:0 0 12px 0;">Add "${autoEmojis(dishName)} ${dishName}" to which day?</h3>
+    <div id="pickDayBtns" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;"></div>
+    <button onclick="document.body.removeChild(this.parentNode.parentNode)">Cancel</button>
+    </div>`;
+  let days = Array.from(document.querySelectorAll('.day-column h3')).map(d=>d.textContent);
+  let pickBtns = modal.querySelector('#pickDayBtns');
+  days.forEach(day=>{
+    let btn=document.createElement('button');
+    btn.textContent=day;
+    btn.style="padding:7px 13px;font-size:1em;margin:2px;";
+    btn.onclick=()=>{
+      let slot = Array.from(document.querySelectorAll('.day-column')).find(c=>c.querySelector('h3').textContent==day).querySelector('.meal-slot');
+      let div=document.createElement('div');
+      div.className='dish';
+      div.textContent=autoEmojis(dishName)+' '+dishName;
+      div.draggable=!isMobile();
+      if (!isMobile()) {
+        div.ondragstart = dishDragStart;
+        div.ondragend = dishDragEnd;
+      }
+      let btn = document.createElement('button');
+      btn.innerHTML = '✖';
+      btn.className = 'remove-dish';
+      btn.onclick = (e)=>{ e.stopPropagation(); div.remove(); analyzePlan(); };
+      div.appendChild(btn);
+      slot.appendChild(div);
+      enableDragOnDishes();
+      analyzePlan();
+      document.body.removeChild(modal);
+    };
+    pickBtns.appendChild(btn);
+  });
+  document.body.appendChild(modal);
+}
+ </script>
 </body>
 </html>
