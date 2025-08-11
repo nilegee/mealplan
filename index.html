@@ -525,6 +525,46 @@
   </script>
 </head>
 <body>
+  <!-- Authentication Container -->
+  <div id="authContainer" style="display: none;">
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(120deg,#fff7f0,#ffe9d6);">
+      <div style="background: #fffdf7; padding: 40px; border-radius: 20px; box-shadow: 0 8px 32px #ffd9b394; max-width: 400px; width: 90%;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <div style="background: #fff; border-radius: 50%; padding: 10px; display: inline-block; margin-bottom: 15px;">
+            <img src="Chef.jpg" alt="Chef Mariem" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+          </div>
+          <h1 style="font-family: 'Pacifico', cursive; color: #c65000; margin: 0; font-size: 1.8em;">Mariem's Kitchen</h1>
+          <p style="color: #9a4b00; margin: 5px 0 0 0;">Access Required</p>
+        </div>
+        
+        <div id="authError" style="background: #ffeaea; color: #d63031; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; font-size: 0.9em;"></div>
+        
+        <form onsubmit="event.preventDefault(); handleAuth(false);" style="display: flex; flex-direction: column; gap: 15px;">
+          <input type="email" id="authEmail" placeholder="Email address" required 
+                 style="padding: 12px; border: 2px solid #ffe1c3; border-radius: 8px; font-size: 1em; background: #fff;">
+          <input type="password" id="authPassword" placeholder="Password" required 
+                 style="padding: 12px; border: 2px solid #ffe1c3; border-radius: 8px; font-size: 1em; background: #fff;">
+          
+          <button type="submit" style="background: linear-gradient(90deg,#ff914d 65%, #ffd480 100%); color: white; border: none; padding: 12px; border-radius: 8px; font-size: 1.1em; font-weight: 600; cursor: pointer;">
+            Sign In
+          </button>
+          
+          <button type="button" onclick="handleAuth(true)" style="background: transparent; color: #ff914d; border: 2px solid #ff914d; padding: 10px; border-radius: 8px; font-size: 1em; cursor: pointer;">
+            Create Account
+          </button>
+        </form>
+        
+        <div style="margin-top: 20px; padding: 15px; background: #fff9f3; border-radius: 8px; font-size: 0.9em; color: #9a4b00;">
+          <strong>Authorized Users:</strong><br>
+          • Family members and admins only<br>
+          • Contact admin for access
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Application Container -->
+  <div id="mainAppContainer" style="display: none;">
   <header>
     <button id="darkModeBtn" class="dark-toggle" aria-label="Switch to dark mode" onclick="setDarkMode(!document.body.classList.contains('dark-mode'));">🌙</button>
     <div class="chef-img-box">
@@ -534,6 +574,7 @@
       <h1>Mariem’s Cozy Kitchen</h1>
       <div class="badge">👩‍🍳 Head Chef: Mariem</div>
       <div class="desc">Where Love is the Secret Ingredient ❤️🍲</div>
+      <div id="userInfo" style="margin-top: 10px; font-size: 0.9em; color: #9a4b00;"></div>
     </div>
   </header>
   <div class="container">
@@ -600,6 +641,235 @@
     <div>🍝 = Pasta-based</div>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Supabase Client -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <!-- ===================== AUTHENTICATION & SECURITY =================== -->
+  <script>
+    // Supabase configuration
+    const SUPABASE_URL = 'https://zlhamcofzyozfyzcgcdg.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsaGFtY29menlvemZ5emNnY2RnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5NTM0MjIsImV4cCI6MjA2OTUyOTQyMn0.CqMDQgfpbyWTi3RgA_eitd_Qf7aJu0WruETtws6B5Mo';
+    
+    // Initialize Supabase client
+    const { createClient } = supabase;
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Whitelisted users - Only these users can access the application
+    const WHITELISTED_USERS = {
+      'yazidgeemail@gmail.com': { role: 'user', name: 'Yazid' },
+      'yahyageemail@gmail.com': { role: 'user', name: 'Yahya' },
+      'abdessamia.mariem@gmail.com': { role: 'admin', name: 'Mariem' },
+      'nilezat@gmail.com': { role: 'admin', name: 'Admin' }
+    };
+    
+    let currentUser = null;
+    let authAttempts = 0;
+    const MAX_AUTH_ATTEMPTS = 5;
+    const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
+    
+    // Authentication functions
+    async function signInWithEmail(email, password) {
+      // Check lockout
+      const lockoutUntil = localStorage.getItem('authLockoutUntil');
+      if (lockoutUntil && Date.now() < parseInt(lockoutUntil)) {
+        const minutesLeft = Math.ceil((parseInt(lockoutUntil) - Date.now()) / 60000);
+        showError(`Too many failed attempts. Try again in ${minutesLeft} minute(s).`);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: email.toLowerCase().trim(),
+          password: password
+        });
+        
+        if (error) {
+          authAttempts++;
+          if (authAttempts >= MAX_AUTH_ATTEMPTS) {
+            localStorage.setItem('authLockoutUntil', (Date.now() + LOCKOUT_TIME).toString());
+            showError('Too many failed attempts. Account temporarily locked for 15 minutes.');
+          } else {
+            showError(`Invalid credentials. ${MAX_AUTH_ATTEMPTS - authAttempts} attempts remaining.`);
+          }
+          return;
+        }
+        
+        const userEmail = data.user.email.toLowerCase();
+        if (!WHITELISTED_USERS[userEmail]) {
+          await supabaseClient.auth.signOut();
+          authAttempts++;
+          throw new Error('Access denied. This account is not authorized to use this application.');
+        }
+        
+        // Clear auth attempts on successful login
+        authAttempts = 0;
+        localStorage.removeItem('authLockoutUntil');
+        
+        currentUser = {
+          ...data.user,
+          userData: WHITELISTED_USERS[userEmail]
+        };
+        
+        updateAuthUI();
+        showMainApp();
+        toast(`Welcome back, ${currentUser.userData.name}! 👋`);
+        
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+    
+    async function signUpWithEmail(email, password) {
+      const normalizedEmail = email.toLowerCase().trim();
+      if (!WHITELISTED_USERS[normalizedEmail]) {
+        showError('Access denied. This email is not authorized to create an account.');
+        return;
+      }
+      
+      if (password.length < 8) {
+        showError('Password must be at least 8 characters long.');
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabaseClient.auth.signUp({
+          email: normalizedEmail,
+          password: password
+        });
+        
+        if (error) throw error;
+        
+        toast('Please check your email for verification link!');
+        
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+    
+    async function signOut() {
+      try {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) throw error;
+        
+        currentUser = null;
+        updateAuthUI();
+        showAuthScreen();
+        
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+    
+    // UI Management
+    function updateAuthUI() {
+      const authContainer = document.getElementById('authContainer');
+      const mainAppContainer = document.getElementById('mainAppContainer');
+      const userInfo = document.getElementById('userInfo');
+      
+      if (currentUser) {
+        authContainer.style.display = 'none';
+        mainAppContainer.style.display = 'block';
+        userInfo.innerHTML = `
+          <span>👋 ${currentUser.userData.name} (${currentUser.userData.role})</span>
+          <button onclick="signOut()" style="margin-left: 10px; font-size: 0.9em; padding: 5px 10px; background: #ff6b47; color: white; border: none; border-radius: 5px; cursor: pointer;">Sign Out</button>
+        `;
+      } else {
+        authContainer.style.display = 'block';
+        mainAppContainer.style.display = 'none';
+        userInfo.innerHTML = '';
+        // Clear any sensitive data
+        if (typeof renderDishLibrary === 'function') {
+          document.getElementById('dishList').innerHTML = '';
+        }
+      }
+    }
+    
+    function initializeMainApp() {
+      renderDishLibrary();
+      initPlanner();
+    }
+    
+    function showMainApp() {
+      document.getElementById('mainAppContainer').style.display = 'block';
+      document.getElementById('authContainer').style.display = 'none';
+      // Initialize the main app functionality
+      setTimeout(initializeMainApp, 100);
+    }
+    
+    function showAuthScreen() {
+      document.getElementById('authContainer').style.display = 'block';
+      document.getElementById('mainAppContainer').style.display = 'none';
+    }
+    
+    function showError(message) {
+      const errorDiv = document.getElementById('authError');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      setTimeout(() => {
+        errorDiv.style.display = 'none';
+      }, 5000);
+    }
+    
+    function handleAuth(isSignUp = false) {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value;
+      
+      if (!email || !password) {
+        showError('Please enter both email and password.');
+        return;
+      }
+      
+      if (isSignUp) {
+        signUpWithEmail(email, password);
+      } else {
+        signInWithEmail(email, password);
+      }
+    }
+    
+    // Check authentication status on load
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (session && session.user) {
+        const userEmail = session.user.email;
+        if (WHITELISTED_USERS[userEmail]) {
+          currentUser = {
+            ...session.user,
+            userData: WHITELISTED_USERS[userEmail]
+          };
+          updateAuthUI();
+          showMainApp();
+        } else {
+          supabaseClient.auth.signOut();
+          showError('Access denied. This account is not authorized.');
+        }
+      } else {
+        currentUser = null;
+        updateAuthUI();
+        showAuthScreen();
+      }
+    });
+    
+    // Initialize authentication on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      updateAuthUI();
+      // Check if user is already logged in
+      supabaseClient.auth.getSession().then(({ data: { session } }) => {
+        if (session && session.user) {
+          const userEmail = session.user.email;
+          if (WHITELISTED_USERS[userEmail]) {
+            currentUser = {
+              ...session.user,
+              userData: WHITELISTED_USERS[userEmail]
+            };
+            updateAuthUI();
+            showMainApp();
+          } else {
+            supabaseClient.auth.signOut();
+          }
+        } else {
+          showAuthScreen();
+        }
+      });
+    });
+  </script>
   <!-- ===================== ALL JS: features, drag, tap-to-add, emoji picker, import/export, insights, etc. =================== -->
  <script>
 // Mobile detection
@@ -704,10 +974,6 @@ function removeCustomDish(idx) {
 
 // DRAG & DROP + Everything else
 let dragElem = null, dragSource = null, lastPlan = null, trashActive = false;
-window.addEventListener('DOMContentLoaded', ()=>{
-  renderDishLibrary();
-  initPlanner();
-});
 function initPlanner(){
   document.querySelectorAll('.meal-slot').forEach(slot => {
     slot.addEventListener('dragover', slotDragOver);
@@ -901,6 +1167,66 @@ function exportToPDF(){
     i++;
   });
   doc.save("Grocery_List.pdf");
+}
+
+// Import/Export functions
+function exportData() {
+  const mealPlan = localStorage.getItem('mealPlan');
+  const customDishes = localStorage.getItem('customDishes');
+  const favorites = localStorage.getItem('favorites');
+  
+  const data = {
+    mealPlan: JSON.parse(mealPlan || '{}'),
+    customDishes: JSON.parse(customDishes || '[]'),
+    favorites: JSON.parse(favorites || '[]'),
+    exportDate: new Date().toISOString()
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mealplan-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Data exported successfully! 📁');
+}
+
+function importData() {
+  document.getElementById('importFile').click();
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      
+      if (data.mealPlan) {
+        localStorage.setItem('mealPlan', JSON.stringify(data.mealPlan));
+      }
+      if (data.customDishes) {
+        localStorage.setItem('customDishes', JSON.stringify(data.customDishes));
+      }
+      if (data.favorites) {
+        localStorage.setItem('favorites', JSON.stringify(data.favorites));
+      }
+      
+      // Reload the app data
+      renderDishLibrary();
+      renderFavorites();
+      loadPlan();
+      toast('Data imported successfully! 🎉');
+      
+    } catch (error) {
+      showError('Invalid backup file format.');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // Reset file input
 }
 
 // Recipe Suggestion & Favorites
@@ -1136,6 +1462,40 @@ function addSuggestedDish(dishText) {
 }
 window.addSuggestedDish = addSuggestedDish;
 
+// Emoji Picker functionality
+function toggleEmojiPicker(event) {
+  event.preventDefault();
+  const picker = document.getElementById('emojiPicker');
+  const button = event.target;
+  
+  if (picker.style.display === 'none' || !picker.style.display) {
+    // Show picker
+    const emojis = ['🍽️', '🍗', '🥩', '🐟', '🍝', '🍚', '🍞', '🌿', '🥣', '🧆', '🍲', '🥘', '🍜', '🍛', '🍕', '🌮', '🥙', '🥗', '🍤', '🦐'];
+    picker.innerHTML = '';
+    emojis.forEach(emoji => {
+      const span = document.createElement('span');
+      span.textContent = emoji;
+      span.onclick = () => selectEmoji(emoji);
+      picker.appendChild(span);
+    });
+    picker.style.display = 'flex';
+  } else {
+    // Hide picker
+    picker.style.display = 'none';
+  }
+}
+
+function selectEmoji(emoji) {
+  const input = document.getElementById('newDishInput');
+  if (input.value && !input.value.startsWith(emoji)) {
+    input.value = emoji + ' ' + input.value;
+  } else if (!input.value) {
+    input.value = emoji + ' ';
+  }
+  document.getElementById('emojiPicker').style.display = 'none';
+  input.focus();
+}
+
 function showAddDishModal(dishName) {
   let modal = document.createElement('div');
   modal.style = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,24,20,0.16);display:flex;align-items:center;justify-content:center;z-index:2000;";
@@ -1175,5 +1535,6 @@ function showAddDishModal(dishName) {
   document.body.appendChild(modal);
 }
  </script>
+  </div> <!-- End Main Application Container -->
 </body>
 </html>
